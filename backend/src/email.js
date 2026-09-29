@@ -1,62 +1,54 @@
 const nodemailer = require('nodemailer');
 
-let transporter = null;
-
-if (process.env.SMTP_HOST) {
-  transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: process.env.SMTP_USER ? {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    } : undefined,
-  });
+if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+  console.warn('[email] SMTP_HOST / SMTP_USER / SMTP_PASS not set — password reset emails will fail.');
 }
 
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '587', 10),
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
 async function sendPasswordResetEmail(toEmail, userName, tempPassword) {
-  const from = process.env.SMTP_FROM || '"TaskHive Security" <no-reply@taskhive.app>';
-  const subject = 'TaskHive — Temporary Password & Account Reset';
+  const from = process.env.SMTP_FROM || `"TaskHive" <${process.env.SMTP_USER}>`;
+  const subject = 'TaskHive — Your Temporary Password';
   const html = `
-    <div style="font-family: 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-      <div style="display: flex; align-items: center; margin-bottom: 20px;">
-        <h2 style="color: #6366f1; margin: 0; font-size: 22px;">TaskHive</h2>
+    <div style="font-family: 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <h2 style="color: #6366f1; margin: 0; font-size: 26px;">🐝 TaskHive</h2>
+        <p style="color: #94a3b8; font-size: 13px; margin-top: 4px;">Password Reset</p>
       </div>
       <p style="color: #334155; font-size: 15px; line-height: 1.5;">Hello <strong>${userName}</strong>,</p>
       <p style="color: #475569; font-size: 14px; line-height: 1.6;">
         We received a request to reset your password for your TaskHive account (<strong>${toEmail}</strong>).
       </p>
       <p style="color: #475569; font-size: 14px;">Your new temporary password is:</p>
-      <div style="background: #f1f5f9; padding: 16px 20px; border-radius: 8px; border: 1px dashed #cbd5e1; font-family: monospace; font-size: 20px; font-weight: bold; color: #4338ca; text-align: center; margin: 18px 0; letter-spacing: 2px;">
+      <div style="background: linear-gradient(135deg, #eef2ff, #f1f5f9); padding: 18px 24px; border-radius: 10px; border: 2px dashed #6366f1; font-family: 'Courier New', monospace; font-size: 24px; font-weight: bold; color: #4338ca; text-align: center; margin: 20px 0; letter-spacing: 3px;">
         ${tempPassword}
       </div>
       <p style="color: #475569; font-size: 14px; line-height: 1.6;">
-        You can now sign in using this password. We recommend updating your password once you are logged in.
+        Use this password to sign in. We strongly recommend changing your password after logging in.
       </p>
-      <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0;">
-      <p style="font-size: 12px; color: #94a3b8; margin: 0;">
-        If you did not request a password reset, please secure your account immediately or contact support.
+      <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 28px 0;">
+      <p style="font-size: 12px; color: #94a3b8; margin: 0; text-align: center;">
+        If you did not request this, please ignore this email or secure your account immediately.
       </p>
     </div>
   `;
 
-  console.log(`\n==================================================`);
-  console.log(`[EMAIL DISPATCH] Password Reset Email to: ${toEmail}`);
-  console.log(`[EMAIL DISPATCH] Temporary Password: ${tempPassword}`);
-  console.log(`==================================================\n`);
-
-  if (transporter) {
-    try {
-      await transporter.sendMail({ from, to: toEmail, subject, html });
-      console.log(`[EMAIL DISPATCH] Email sent successfully via SMTP to ${toEmail}`);
-      return { sent: true, method: 'smtp' };
-    } catch (err) {
-      console.error(`[EMAIL DISPATCH] SMTP send error:`, err.message);
-      return { sent: false, error: err.message, tempPassword };
-    }
+  try {
+    await transporter.sendMail({ from, to: toEmail, subject, html });
+    console.log(`[email] Password reset email sent to ${toEmail}`);
+    return { sent: true };
+  } catch (err) {
+    console.error(`[email] Failed to send email to ${toEmail}:`, err.message);
+    throw new Error('Failed to send email. Please try again later or contact support.');
   }
-
-  return { sent: true, method: 'logger', tempPassword };
 }
 
 module.exports = { sendPasswordResetEmail };

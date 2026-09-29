@@ -329,19 +329,15 @@ function renderAuth(mode = 'login') {
         const data = await api('/auth/forgot-password', { method: 'POST', body });
         setBusy(btn, false);
 
-        let successHtml = `<div style="padding:12px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;color:var(--text);font-size:13px;line-height:1.5;">
-          ${esc(data.message)}
+        $('#auth-success').innerHTML = `<div style="padding:14px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;color:var(--text);font-size:13px;line-height:1.6;text-align:center;">
+          <strong style="font-size:15px;">📧 Check your inbox!</strong><br>
+          ${esc(data.message)}<br><br>
+          <a href="#" id="back-to-login" style="color:var(--brand);font-weight:600;text-decoration:none;">← Back to Sign In</a>
         </div>`;
-
-        if (data.tempPassword) {
-          successHtml += `<div style="margin-top:10px;padding:12px;background:var(--bg-elevated);border:1px dashed var(--brand);border-radius:8px;text-align:center;">
-            <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Temporary Password:</div>
-            <strong style="font-family:monospace;font-size:18px;color:var(--brand);letter-spacing:1px;">${esc(data.tempPassword)}</strong>
-          </div>`;
+        if ($('#back-to-login')) {
+          $('#back-to-login').onclick = (ev) => { ev.preventDefault(); renderAuth('login'); };
         }
-
-        $('#auth-success').innerHTML = successHtml;
-        toast('Password reset email dispatched!');
+        toast('Password reset email sent!');
       } else {
         const data = await api(isLogin ? '/auth/login' : '/auth/register', { method: 'POST', body });
         setSession(data);

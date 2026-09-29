@@ -42,6 +42,11 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       DASHBOARD_CACHE_TTL: 60
       LOG_DIR: /app/logs
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
     volumes:
       - app_logs:/app/logs
     networks:

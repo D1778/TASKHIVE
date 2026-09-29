@@ -110,8 +110,7 @@ router.post(
     const result = await sendPasswordResetEmail(user.email, user.name, tempPassword);
 
     res.json({
-      message: `A new temporary password has been dispatched to ${user.email}!`,
-      tempPassword: tempPassword,
+      message: `A temporary password has been sent to ${user.email}. Please check your inbox.`,
     });
   })
 );
