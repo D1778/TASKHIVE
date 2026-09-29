@@ -11,7 +11,8 @@ const cache = require('./cache');
 const app = express();
 app.set('trust proxy', 1); // behind the nginx reverse proxy
 app.disable('x-powered-by');
-app.use(helmet());
+// CSP is off because the SPA uses an inline theme script (matches the nginx setup).
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '600kb' })); // room for a base64 company logo
 
 // Access log is written to a named volume so it survives container re-creation.
@@ -37,6 +38,13 @@ app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api', require('./routes/workspace'));
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Endpoint not found' }));
+
+// Without Docker/nginx, the API can serve the frontend itself: set STATIC_DIR=../frontend/public.
+if (process.env.STATIC_DIR) {
+  const staticDir = path.resolve(process.env.STATIC_DIR);
+  app.use(express.static(staticDir));
+  console.log(`[api] serving frontend from ${staticDir}`);
+}
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {

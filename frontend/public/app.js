@@ -254,7 +254,22 @@ const field = (label, name, type, placeholder, extra = '') =>
 
 function renderAuth(mode = 'login') {
   const isLogin = mode === 'login';
+  const isRegister = mode === 'register';
+  const isForgot = mode === 'forgot';
+
+  const title = isLogin ? 'Welcome back' : isRegister ? 'Create your workspace' : 'Reset your password';
+  const subtitle = isLogin
+    ? 'Sign in to continue to your workspace.'
+    : isRegister
+    ? 'Start free — no credit card required.'
+    : 'Enter your account email to receive a temporary login password.';
+
   const heroCol = (title, n) => `<div class="hero-col"><div class="hero-col-title">${title}</div>${'<div class="hero-card"></div>'.repeat(n)}</div>`;
+
+  const passwordLabelHtml = isLogin
+    ? `<span>Password</span><a href="#" id="auth-forgot" style="float:right;font-size:12px;color:var(--brand);text-decoration:none;">Forgot password?</a>`
+    : `<span>Password</span>`;
+
   $('#app').innerHTML = `
     <div class="auth">
       <section class="auth-hero">
@@ -273,33 +288,65 @@ function renderAuth(mode = 'login') {
       </section>
       <section class="auth-panel">
         <form class="auth-form fade-in" id="auth-form" novalidate>
-          <h2>${isLogin ? 'Welcome back' : 'Create your workspace'}</h2>
-          <p class="muted">${isLogin ? 'Sign in to continue to your workspace.' : 'Start free — no credit card required.'}</p>
-          ${isLogin ? '' : field('Full name', 'name', 'text', 'Ada Lovelace', 'autocomplete="name"') + field('Workspace name', 'workspace', 'text', 'Acme Inc.')}
+          <h2>${title}</h2>
+          <p class="muted">${subtitle}</p>
+          ${isRegister ? field('Full name', 'name', 'text', 'Ada Lovelace', 'autocomplete="name"') + field('Workspace name', 'workspace', 'text', 'Acme Inc.') : ''}
           ${field('Work email', 'email', 'email', 'you@company.com', 'autocomplete="email"')}
-          ${field('Password', 'password', 'password', isLogin ? '••••••••' : 'At least 8 characters', `autocomplete="${isLogin ? 'current-password' : 'new-password'}" minlength="8"`)}
+          ${isForgot ? '' : `<label class="field">${passwordLabelHtml}<input name="password" type="password" placeholder="${isLogin ? '••••••••' : 'At least 8 characters'}" required autocomplete="${isLogin ? 'current-password' : 'new-password'}" minlength="8"></label>`}
           <div class="form-error" id="auth-error"></div>
-          <button class="btn btn-primary btn-block" type="submit">${isLogin ? 'Sign in' : 'Create workspace'}</button>
-          <p class="switch">${isLogin ? "Don't have an account?" : 'Already have an account?'}
-            <a href="#" id="auth-switch">${isLogin ? 'Create a workspace' : 'Sign in'}</a></p>
+          <div id="auth-success" style="margin-bottom:12px"></div>
+          <button class="btn btn-primary btn-block" type="submit">${isLogin ? 'Sign in' : isRegister ? 'Create workspace' : 'Send temporary password'}</button>
+          <p class="switch">
+            ${isLogin ? "Don't have an account?" : isRegister ? 'Already have an account?' : 'Remembered your password?'}
+            <a href="#" id="auth-switch">${isLogin ? 'Create a workspace' : 'Sign in'}</a>
+          </p>
         </form>
       </section>
     </div>`;
+
+  if ($('#auth-forgot')) {
+    $('#auth-forgot').onclick = (e) => {
+      e.preventDefault();
+      renderAuth('forgot');
+    };
+  }
 
   $('#auth-switch').onclick = (e) => {
     e.preventDefault();
     renderAuth(isLogin ? 'register' : 'login');
   };
+
   $('#auth-form').onsubmit = async (e) => {
     e.preventDefault();
     const btn = $('button[type=submit]', e.target);
     const body = Object.fromEntries(new FormData(e.target));
     $('#auth-error').textContent = '';
-    setBusy(btn, true, isLogin ? 'Signing in…' : 'Creating workspace…');
+    if ($('#auth-success')) $('#auth-success').innerHTML = '';
+
+    setBusy(btn, true, isLogin ? 'Signing in…' : isRegister ? 'Creating workspace…' : 'Sending email…');
     try {
-      const data = await api(isLogin ? '/auth/login' : '/auth/register', { method: 'POST', body });
-      setSession(data);
-      toast(isLogin ? `Welcome back, ${data.user.name.split(' ')[0]}!` : `Welcome to TaskHive, ${data.user.name.split(' ')[0]}!`);
+      if (isForgot) {
+        const data = await api('/auth/forgot-password', { method: 'POST', body });
+        setBusy(btn, false);
+
+        let successHtml = `<div style="padding:12px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;color:var(--text);font-size:13px;line-height:1.5;">
+          ${esc(data.message)}
+        </div>`;
+
+        if (data.tempPassword) {
+          successHtml += `<div style="margin-top:10px;padding:12px;background:var(--bg-elevated);border:1px dashed var(--brand);border-radius:8px;text-align:center;">
+            <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Temporary Password:</div>
+            <strong style="font-family:monospace;font-size:18px;color:var(--brand);letter-spacing:1px;">${esc(data.tempPassword)}</strong>
+          </div>`;
+        }
+
+        $('#auth-success').innerHTML = successHtml;
+        toast('Password reset email dispatched!');
+      } else {
+        const data = await api(isLogin ? '/auth/login' : '/auth/register', { method: 'POST', body });
+        setSession(data);
+        toast(isLogin ? `Welcome back, ${data.user.name.split(' ')[0]}!` : `Welcome to TaskHive, ${data.user.name.split(' ')[0]}!`);
+      }
     } catch (ex) {
       $('#auth-error').textContent = ex.message;
       setBusy(btn, false);

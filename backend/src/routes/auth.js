@@ -1,7 +1,9 @@
+const crypto = require('crypto');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 const cache = require('../cache');
+const { sendPasswordResetEmail } = require('../email');
 const { h, HttpError, signToken, requireAuth, randomColor } = require('../util');
 
 const router = express.Router();
@@ -78,6 +80,39 @@ router.post(
 
     const session = await loadSession(rows[0].id);
     res.json({ token: signToken(session.user), ...session });
+  })
+);
+
+router.post(
+  '/forgot-password',
+  h(async (req, res) => {
+    const rl = await cache.rateLimit(`forgot:${req.ip}`, 10, 900);
+    if (!rl.allowed) throw new HttpError(429, 'Too many reset attempts. Please wait 15 minutes.');
+
+    const { email } = req.body || {};
+    if (!email || !EMAIL_RE.test(email)) throw new HttpError(400, 'Please enter a valid email address');
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const { rows } = await db.query('SELECT id, name, email FROM users WHERE email = $1', [normalizedEmail]);
+
+    if (!rows.length) {
+      return res.json({
+        message: 'If an account exists with that email, a new temporary password has been sent to it.',
+      });
+    }
+
+    const user = rows[0];
+    const tempPassword = 'th_' + crypto.randomBytes(4).toString('hex');
+    const hash = await bcrypt.hash(tempPassword, 10);
+
+    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, user.id]);
+
+    const result = await sendPasswordResetEmail(user.email, user.name, tempPassword);
+
+    res.json({
+      message: `A new temporary password has been dispatched to ${user.email}!`,
+      tempPassword: tempPassword,
+    });
   })
 );
 

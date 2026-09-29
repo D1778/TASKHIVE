@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(node --check frontend/public/app.js)",
+      "PowerShell(docker compose logs backend --tail 8)",
+      "PowerShell(docker exec taskhive-frontend sh -c \"which nc nslookup wget\")",
+      "PowerShell(docker exec taskhive-frontend sh -c \"nc -z -w 3 db 5432; echo exit=`$?\")",
+      "PowerShell(docker exec taskhive-db sh -c \"wget -T 3 -qO- http://example.com >/dev/null 2>&1; echo exit=`$?\")",
+      "PowerShell(docker exec taskhive-backend sh -c \"wget -T 3 -qO- http://example.com >/dev/null 2>&1; echo exit=`$?\")",
+      "PowerShell(powershell -ExecutionPolicy Bypass -File scripts\\\\validate.ps1)"
+    ]
+  }
+}
