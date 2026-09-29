@@ -252,23 +252,75 @@ function toggleTheme() {
 const field = (label, name, type, placeholder, extra = '') =>
   `<label class="field"><span>${label}</span><input name="${name}" type="${type}" placeholder="${placeholder}" required ${extra}></label>`;
 
-function renderAuth(mode = 'login') {
+function renderAuth(mode = 'login', extraData = {}) {
   const isLogin = mode === 'login';
   const isRegister = mode === 'register';
   const isForgot = mode === 'forgot';
+  const isVerifyTemp = mode === 'verify-temp';
+  const isNewPassword = mode === 'new-password';
 
-  const title = isLogin ? 'Welcome back' : isRegister ? 'Create your workspace' : 'Reset your password';
-  const subtitle = isLogin
-    ? 'Sign in to continue to your workspace.'
-    : isRegister
-    ? 'Start free — no credit card required.'
-    : 'Enter your account email to receive a temporary login password.';
+  const emailVal = extraData.email || '';
+  const tempPasswordVal = extraData.tempPassword || '';
+
+  let title = 'Welcome back';
+  let subtitle = 'Sign in to continue to your workspace.';
+  let buttonText = 'Sign in';
+
+  if (isRegister) {
+    title = 'Create your workspace';
+    subtitle = 'Start free — no credit card required.';
+    buttonText = 'Create workspace';
+  } else if (isForgot) {
+    title = 'Reset your password';
+    subtitle = 'Enter your account email to receive a temporary login password.';
+    buttonText = 'Send temporary password';
+  } else if (isVerifyTemp) {
+    title = 'Enter temporary password';
+    subtitle = `A temporary password has been sent to ${emailVal ? `<strong style="color:var(--text);">${esc(emailVal)}</strong>` : 'your email'}. Check your inbox and enter it below.`;
+    buttonText = 'Verify temporary password';
+  } else if (isNewPassword) {
+    title = 'Create new password';
+    subtitle = 'Set a new password for your account.';
+    buttonText = 'Set new password';
+  }
 
   const heroCol = (title, n) => `<div class="hero-col"><div class="hero-col-title">${title}</div>${'<div class="hero-card"></div>'.repeat(n)}</div>`;
 
   const passwordLabelHtml = isLogin
-    ? `<span>Password</span><a href="#" id="auth-forgot" style="float:right;font-size:12px;color:var(--brand);text-decoration:none;">Forgot password?</a>`
+    ? `<span>Password</span><a href="#" id="auth-forgot" style="float:right;font-size:12px;color:var(--primary);text-decoration:none;">Forgot password?</a>`
     : `<span>Password</span>`;
+
+  let fieldsHtml = '';
+
+  if (isRegister) {
+    fieldsHtml =
+      field('Full name', 'name', 'text', 'Ada Lovelace', 'autocomplete="name"') +
+      field('Workspace name', 'workspace', 'text', 'Acme Inc.') +
+      field('Work email', 'email', 'email', 'you@company.com', 'autocomplete="email"') +
+      `<label class="field">${passwordLabelHtml}<input name="password" type="password" placeholder="At least 8 characters" required autocomplete="new-password" minlength="8"></label>`;
+  } else if (isLogin) {
+    fieldsHtml =
+      field('Work email', 'email', 'email', 'you@company.com', `autocomplete="email" value="${esc(emailVal)}"`) +
+      `<label class="field">${passwordLabelHtml}<input name="password" type="password" placeholder="••••••••" required autocomplete="current-password" minlength="8"></label>`;
+  } else if (isForgot) {
+    fieldsHtml = field('Work email', 'email', 'email', 'you@company.com', `autocomplete="email" value="${esc(emailVal)}"`);
+  } else if (isVerifyTemp) {
+    fieldsHtml =
+      `<input type="hidden" name="email" value="${esc(emailVal)}">` +
+      field('Temporary password', 'tempPassword', 'text', 'Enter temporary password sent to your email', 'autocomplete="off" required');
+  } else if (isNewPassword) {
+    fieldsHtml =
+      `<input type="hidden" name="email" value="${esc(emailVal)}">` +
+      `<input type="hidden" name="tempPassword" value="${esc(tempPasswordVal)}">` +
+      field('New password', 'newPassword', 'password', 'Enter new password', 'autocomplete="new-password" minlength="8" required') +
+      field('Re-enter new password', 'confirmPassword', 'password', 'Re-enter new password', 'autocomplete="new-password" minlength="8" required');
+  }
+
+  const switchPromptHtml = isLogin
+    ? `Don't have an account? <a href="#" id="auth-switch">Create a workspace</a>`
+    : isRegister
+    ? `Already have an account? <a href="#" id="auth-switch">Sign in</a>`
+    : `<a href="#" id="auth-switch">← Back to Sign in</a>`;
 
   $('#app').innerHTML = `
     <div class="auth">
@@ -290,15 +342,12 @@ function renderAuth(mode = 'login') {
         <form class="auth-form fade-in" id="auth-form" novalidate>
           <h2>${title}</h2>
           <p class="muted">${subtitle}</p>
-          ${isRegister ? field('Full name', 'name', 'text', 'Ada Lovelace', 'autocomplete="name"') + field('Workspace name', 'workspace', 'text', 'Acme Inc.') : ''}
-          ${field('Work email', 'email', 'email', 'you@company.com', 'autocomplete="email"')}
-          ${isForgot ? '' : `<label class="field">${passwordLabelHtml}<input name="password" type="password" placeholder="${isLogin ? '••••••••' : 'At least 8 characters'}" required autocomplete="${isLogin ? 'current-password' : 'new-password'}" minlength="8"></label>`}
+          ${fieldsHtml}
           <div class="form-error" id="auth-error"></div>
           <div id="auth-success" style="margin-bottom:12px"></div>
-          <button class="btn btn-primary btn-block" type="submit">${isLogin ? 'Sign in' : isRegister ? 'Create workspace' : 'Send temporary password'}</button>
+          <button class="btn btn-primary btn-block" type="submit">${buttonText}</button>
           <p class="switch">
-            ${isLogin ? "Don't have an account?" : isRegister ? 'Already have an account?' : 'Remembered your password?'}
-            <a href="#" id="auth-switch">${isLogin ? 'Create a workspace' : 'Sign in'}</a>
+            ${switchPromptHtml}
           </p>
         </form>
       </section>
@@ -323,33 +372,65 @@ function renderAuth(mode = 'login') {
     $('#auth-error').textContent = '';
     if ($('#auth-success')) $('#auth-success').innerHTML = '';
 
-    setBusy(btn, true, isLogin ? 'Signing in…' : isRegister ? 'Creating workspace…' : 'Sending email…');
-    try {
-      if (isForgot) {
+    if (isForgot) {
+      setBusy(btn, true, 'Sending email…');
+      try {
         const data = await api('/auth/forgot-password', { method: 'POST', body });
         setBusy(btn, false);
-
-        $('#auth-success').innerHTML = `<div style="padding:14px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;color:var(--text);font-size:13px;line-height:1.6;text-align:center;">
-          <strong style="font-size:15px;">📧 Check your inbox!</strong><br>
-          ${esc(data.message)}<br><br>
-          <a href="#" id="back-to-login" style="color:var(--brand);font-weight:600;text-decoration:none;">← Back to Sign In</a>
-        </div>`;
-        if ($('#back-to-login')) {
-          $('#back-to-login').onclick = (ev) => { ev.preventDefault(); renderAuth('login'); };
-        }
-        toast('Password reset email sent!');
-      } else {
+        toast('Temporary password sent to your email!');
+        renderAuth('verify-temp', { email: (body.email || '').trim() });
+      } catch (ex) {
+        $('#auth-error').textContent = ex.message;
+        setBusy(btn, false);
+      }
+    } else if (isVerifyTemp) {
+      setBusy(btn, true, 'Verifying…');
+      try {
+        await api('/auth/verify-temp-password', { method: 'POST', body });
+        setBusy(btn, false);
+        toast('Temporary password verified!');
+        renderAuth('new-password', {
+          email: (body.email || '').trim(),
+          tempPassword: (body.tempPassword || '').trim(),
+        });
+      } catch (ex) {
+        $('#auth-error').textContent = ex.message;
+        setBusy(btn, false);
+      }
+    } else if (isNewPassword) {
+      if (body.newPassword !== body.confirmPassword) {
+        $('#auth-error').textContent = 'New passwords do not match';
+        return;
+      }
+      setBusy(btn, true, 'Updating password…');
+      try {
+        await api('/auth/reset-password', { method: 'POST', body });
+        setBusy(btn, false);
+        toast('Password updated successfully! Please sign in.');
+        renderAuth('login', { email: (body.email || '').trim() });
+      } catch (ex) {
+        $('#auth-error').textContent = ex.message;
+        setBusy(btn, false);
+      }
+    } else {
+      setBusy(btn, true, isLogin ? 'Signing in…' : 'Creating workspace…');
+      try {
         const data = await api(isLogin ? '/auth/login' : '/auth/register', { method: 'POST', body });
         setSession(data);
         toast(isLogin ? `Welcome back, ${data.user.name.split(' ')[0]}!` : `Welcome to TaskHive, ${data.user.name.split(' ')[0]}!`);
+      } catch (ex) {
+        $('#auth-error').textContent = ex.message;
+        setBusy(btn, false);
       }
-    } catch (ex) {
-      $('#auth-error').textContent = ex.message;
-      setBusy(btn, false);
     }
   };
-  setTimeout(() => $('#auth-form input')?.focus(), 50);
+
+  setTimeout(() => {
+    const firstInput = Array.from($('#auth-form').querySelectorAll('input')).find((el) => el.type !== 'hidden');
+    firstInput?.focus();
+  }, 50);
 }
+
 
 function setSession(data) {
   state.token = data.token;

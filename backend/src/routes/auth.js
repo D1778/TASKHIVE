@@ -115,6 +115,46 @@ router.post(
   })
 );
 
+router.post(
+  '/verify-temp-password',
+  h(async (req, res) => {
+    const { email, tempPassword } = req.body || {};
+    if (!email || !tempPassword) throw new HttpError(400, 'Email and temporary password are required');
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const { rows } = await db.query('SELECT id, password_hash FROM users WHERE email = $1', [normalizedEmail]);
+    if (!rows.length) throw new HttpError(401, 'Invalid email or temporary password');
+
+    const valid = await bcrypt.compare(String(tempPassword).trim(), rows[0].password_hash);
+    if (!valid) throw new HttpError(401, 'Invalid temporary password. Please check your inbox.');
+
+    res.json({ success: true, message: 'Temporary password verified' });
+  })
+);
+
+router.post(
+  '/reset-password',
+  h(async (req, res) => {
+    const { email, tempPassword, newPassword } = req.body || {};
+    if (!email || !tempPassword || !newPassword)
+      throw new HttpError(400, 'Email, temporary password, and new password are required');
+    if (newPassword.length < 8)
+      throw new HttpError(400, 'New password must be at least 8 characters');
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const { rows } = await db.query('SELECT id, password_hash FROM users WHERE email = $1', [normalizedEmail]);
+    if (!rows.length) throw new HttpError(401, 'Invalid email or temporary password');
+
+    const valid = await bcrypt.compare(String(tempPassword).trim(), rows[0].password_hash);
+    if (!valid) throw new HttpError(401, 'Invalid temporary password. Please try again.');
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, rows[0].id]);
+
+    res.json({ success: true, message: 'Password updated successfully' });
+  })
+);
+
 router.get(
   '/me',
   requireAuth,
