@@ -124,5 +124,27 @@ router.get(
     res.json(session);
   })
 );
+router.put(
+  '/change-password',
+  requireAuth,
+  h(async (req, res) => {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword)
+      throw new HttpError(400, 'Current password and new password are required');
+    if (newPassword.length < 8)
+      throw new HttpError(400, 'New password must be at least 8 characters');
+
+    const { rows } = await db.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+    if (!rows.length) throw new HttpError(401, 'Account not found');
+
+    const valid = await bcrypt.compare(currentPassword, rows[0].password_hash);
+    if (!valid) throw new HttpError(401, 'Current password is incorrect');
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.user.id]);
+
+    res.json({ message: 'Password updated successfully' });
+  })
+);
 
 module.exports = router;

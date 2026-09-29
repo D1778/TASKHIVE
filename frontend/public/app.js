@@ -1238,6 +1238,19 @@ function viewSettings() {
           <dt>Appearance</dt><dd><button class="btn btn-sm" id="settings-theme">${icon(currentTheme() === 'dark' ? 'sun' : 'moon', 14)} ${currentTheme() === 'dark' ? 'Light' : 'Dark'} mode</button></dd>
         </dl>
       </div>
+    </div>
+    <div class="card section-gap">
+      <div class="card-head"><h3>Change password</h3></div>
+      <div class="card-body">
+        <form id="change-pw-form" style="max-width:380px">
+          <label class="field"><span>Current password</span><input name="currentPassword" type="password" placeholder="Enter current password" required minlength="1"></label>
+          <label class="field"><span>New password</span><input name="newPassword" type="password" placeholder="At least 8 characters" required minlength="8"></label>
+          <label class="field"><span>Confirm new password</span><input name="confirmPassword" type="password" placeholder="Re-enter new password" required minlength="8"></label>
+          <div class="form-error" id="pw-error"></div>
+          <div id="pw-success" style="margin-bottom:12px"></div>
+          <button class="btn btn-primary" type="submit">Update password</button>
+        </form>
+      </div>
     </div>`);
 
   renderWorkspacePanel(false);
@@ -1246,6 +1259,36 @@ function viewSettings() {
   $('#settings-theme').onclick = () => {
     toggleTheme();
     viewSettings();
+  };
+
+  $('#change-pw-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const body = Object.fromEntries(new FormData(form));
+    const errEl = $('#pw-error');
+    const sucEl = $('#pw-success');
+    errEl.textContent = '';
+    sucEl.innerHTML = '';
+
+    if (body.newPassword !== body.confirmPassword) {
+      errEl.textContent = 'New passwords do not match';
+      return;
+    }
+
+    const btn = $('button[type=submit]', form);
+    setBusy(btn, true, 'Updating…');
+    try {
+      const data = await api('/auth/change-password', {
+        method: 'PUT',
+        body: { currentPassword: body.currentPassword, newPassword: body.newPassword },
+      });
+      sucEl.innerHTML = `<div style="padding:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;color:var(--text);font-size:13px;">✅ ${esc(data.message)}</div>`;
+      form.reset();
+      toast('Password changed successfully!');
+    } catch (ex) {
+      errEl.textContent = ex.message;
+    }
+    setBusy(btn, false);
   };
 }
 
