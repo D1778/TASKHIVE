@@ -1,0 +1,116 @@
+# TaskHive — multi-container SaaS stack
+#
+#   Browser ──► frontend (nginx) ──► backend (Node API) ──► db (PostgreSQL)
+#               [frontend_net]        [both networks]    └─► redis (Redis)
+#                                                            [backend_net, internal]
+#
+# Works with both `docker compose` and `podman compose`.
+
+name: taskhive
+
+services:
+  frontend:
+    build: ./frontend
+    image: taskhive-frontend:1.0
+    container_name: taskhive-frontend
+    ports:
+      - "${APP_PORT:-8080}:80"          # the ONLY port published to the host
+    networks:
+      - frontend_net
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/nginx-health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    image: taskhive-backend:1.0
+    container_name: taskhive-backend
+    environment:
+      PORT: 5000
+      DB_HOST: db                       # resolved by Docker's embedded DNS
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      DASHBOARD_CACHE_TTL: 60
+      LOG_DIR: /app/logs
+    volumes:
+      - app_logs:/app/logs
+    networks:
+      - frontend_net                    # reachable by nginx
+      - backend_net                     # can reach db + redis
+    expose:
+      - "5000"                          # internal only, not published
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: taskhive-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: taskhive-redis
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD}  # lets redis-cli authenticate in healthchecks / exec
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+networks:
+  frontend_net:
+    name: taskhive_frontend_net
+    driver: bridge
+  backend_net:
+    name: taskhive_backend_net
+    driver: bridge
+    internal: true                      # no outbound internet, unreachable from frontend_net
+
+volumes:
+  pg_data:
+    name: taskhive_pg_data
+  redis_data:
+    name: taskhive_redis_data
+  app_logs:
+    name: taskhive_app_logs

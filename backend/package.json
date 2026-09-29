@@ -1,0 +1,19 @@
+{
+  "name": "taskhive-api",
+  "version": "1.0.0",
+  "description": "TaskHive SaaS REST API (Express + PostgreSQL + Redis)",
+  "main": "src/server.js",
+  "private": true,
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "pg": "^8.13.1",
+    "redis": "^4.7.0"
+  }
+}
